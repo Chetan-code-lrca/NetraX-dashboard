@@ -1,244 +1,91 @@
-import React from "react";
-import "./App.css";
+import { useEffect, useRef, useState } from 'react'
+import './App.css'
+import AnalysisProgress from './components/AnalysisProgress'
+import AlertDetails from './components/AlertDetails'
+import Header from './components/Header'
+import NetworkPath from './components/NetworkPath'
+import RecentAlerts from './components/RecentAlerts'
+import SecuritySummary from './components/SecuritySummary'
+import TrafficAnalysisView from './components/TrafficAnalysisView'
+import TrafficInput from './components/TrafficInput'
+import ThreatActivity from './components/ThreatActivity'
+import ThreatModelGrid from './components/ThreatModelGrid'
+import { threatModels } from './data/threatModels'
+import { normalizeAnalysisResponse } from './models/analysis'
+import { analyzeTraffic } from './services/api'
 
 function App() {
+  const [trafficFile, setTrafficFile] = useState(null)
+  const [recordCount, setRecordCount] = useState(null)
+  const [analysisStatus, setAnalysisStatus] = useState('idle')
+  const [analysis, setAnalysis] = useState(null)
+  const [error, setError] = useState('')
+  const [selectedAlertId, setSelectedAlertId] = useState(null)
+  const abortRef = useRef(null)
+
+  useEffect(() => () => abortRef.current?.abort(), [])
+
+  const alerts = analysisStatus === 'complete' ? analysis?.alerts ?? [] : []
+  const selectedAlert = alerts.find((alert) => alert.flow_id === selectedAlertId)
+
+  const handleFile = async (file) => {
+    abortRef.current?.abort()
+    setTrafficFile(file)
+    setRecordCount(null)
+    setAnalysis(null)
+    setError('')
+    setSelectedAlertId(null)
+    setAnalysisStatus(file ? 'ready' : 'idle')
+    if (file?.name.toLowerCase().endsWith('.csv')) {
+      const contents = await file.text()
+      setRecordCount(Math.max(contents.trim().split(/\r?\n/).length - 1, 0))
+    }
+  }
+
+  const startAnalysis = async () => {
+    if (!trafficFile) return
+    setError('')
+    setAnalysisStatus('uploading')
+    abortRef.current = new AbortController()
+    try {
+      setAnalysisStatus('analyzing')
+      const response = await analyzeTraffic(trafficFile, abortRef.current.signal)
+      const normalized = normalizeAnalysisResponse(response, trafficFile)
+      setAnalysis(normalized)
+      if (normalized.status === 'complete') {
+        setAnalysisStatus('complete')
+        setSelectedAlertId(normalized.alerts[0]?.flow_id ?? null)
+      }
+    } catch (requestError) {
+      if (requestError.name === 'AbortError') { setAnalysisStatus('ready'); return }
+      setError(requestError.message)
+      setAnalysisStatus(requestError.backendOffline ? 'backend_offline' : 'error')
+    }
+  }
+
+  const stopAnalysis = () => abortRef.current?.abort()
+  const resetAnalysis = () => { abortRef.current?.abort(); setTrafficFile(null); setRecordCount(null); setAnalysisStatus('idle'); setAnalysis(null); setError(''); setSelectedAlertId(null) }
+  const headerStatus = analysisStatus === 'backend_offline' ? 'BACKEND OFFLINE' : analysisStatus === 'complete' ? 'ANALYSIS COMPLETE' : 'ANALYSIS SERVICE READY'
+
   return (
-    <div className="app">
-      {/* Header */}
-      <header className="header">
-        <div className="logo">
-          <span className="logo-icon">🛡️</span>
-          <div>
-            <h1>NetraX</h1>
-            <p>Cyber Threat Intelligence</p>
-          </div>
-        </div>
-
-        <div className="system-status">
-          <span className="status-dot"></span>
-          System Online
-        </div>
-      </header>
-
-      {/* Navigation */}
-      <nav className="navbar">
-        <button className="active">Dashboard</button>
-        <button>Threat Map</button>
-        <button>Analytics</button>
-        <button>Alerts</button>
-        <button>Network</button>
-      </nav>
-
-      {/* Main Content */}
-      <main className="main-content">
-
-        {/* Page heading */}
-        <section className="page-heading">
-          <div>
-            <h2>Cyber Threat Monitoring Dashboard</h2>
-            <p>
-              AI-based detection and monitoring of cyber threats in
-              unidirectional IP networks.
-            </p>
-          </div>
-
-          <button className="refresh-btn">
-            🔄 Refresh Data
-          </button>
+    <div className="app-shell">
+      <Header systemStatus={headerStatus} />
+      <main className="dashboard">
+        <TrafficInput file={trafficFile} recordCount={recordCount} status={analysisStatus} error={error} onFile={handleFile} onStart={startAnalysis} onStop={stopAnalysis} onReset={resetAnalysis} />
+        <NetworkPath alert={selectedAlert} />
+        <AnalysisProgress status={analysisStatus} analysis={analysis} />
+        <SecuritySummary alerts={alerts} totalFlows={analysis?.flows_processed ?? null} isComplete={analysisStatus === 'complete'} />
+        <ThreatActivity alerts={alerts} models={threatModels} />
+        <section className="event-workflow" aria-label="Security event workflow">
+          <RecentAlerts alerts={alerts} selectedAlertId={selectedAlertId} onSelectAlert={setSelectedAlertId} />
+          <AlertDetails alert={selectedAlert} />
+          <TrafficAnalysisView alert={selectedAlert} />
         </section>
-
-        {/* Statistics */}
-        <section className="stats-grid">
-
-          <div className="stat-card">
-            <div className="stat-icon">🟢</div>
-            <div>
-              <p>System Status</p>
-              <h3>Operational</h3>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">⚠️</div>
-            <div>
-              <p>Active Threats</p>
-              <h3>12</h3>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">🚨</div>
-            <div>
-              <p>Critical Alerts</p>
-              <h3>3</h3>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">📡</div>
-            <div>
-              <p>Network Nodes</p>
-              <h3>48</h3>
-            </div>
-          </div>
-
-        </section>
-
-        {/* Dashboard Grid */}
-        <section className="dashboard-grid">
-
-          {/* Threat Overview */}
-          <div className="dashboard-card large-card">
-            <div className="card-header">
-              <div>
-                <h3>Threat Overview</h3>
-                <p>Real-time cyber threat activity</p>
-              </div>
-
-              <span className="live-badge">
-                ● LIVE
-              </span>
-            </div>
-
-            <div className="threat-chart">
-              <div className="chart-bars">
-                <div className="bar" style={{ height: "35%" }}></div>
-                <div className="bar" style={{ height: "55%" }}></div>
-                <div className="bar" style={{ height: "45%" }}></div>
-                <div className="bar" style={{ height: "70%" }}></div>
-                <div className="bar" style={{ height: "50%" }}></div>
-                <div className="bar" style={{ height: "85%" }}></div>
-                <div className="bar" style={{ height: "65%" }}></div>
-                <div className="bar" style={{ height: "90%" }}></div>
-                <div className="bar" style={{ height: "60%" }}></div>
-                <div className="bar" style={{ height: "75%" }}></div>
-                <div className="bar" style={{ height: "45%" }}></div>
-                <div className="bar" style={{ height: "80%" }}></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Threat Levels */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <div>
-                <h3>Threat Levels</h3>
-                <p>Current risk classification</p>
-              </div>
-            </div>
-
-            <div className="threat-levels">
-
-              <div className="level">
-                <div>
-                  <span>Critical</span>
-                </div>
-                <strong>3</strong>
-              </div>
-
-              <div className="level">
-                <div>
-                  <span>High</span>
-                </div>
-                <strong>5</strong>
-              </div>
-
-              <div className="level">
-                <div>
-                  <span>Medium</span>
-                </div>
-                <strong>4</strong>
-              </div>
-
-              <div className="level">
-                <div>
-                  <span>Low</span>
-                </div>
-                <strong>8</strong>
-              </div>
-
-            </div>
-          </div>
-
-        </section>
-
-        {/* Recent Alerts */}
-        <section className="dashboard-card alerts-card">
-
-          <div className="card-header">
-            <div>
-              <h3>Recent Security Alerts</h3>
-              <p>Latest detected activities</p>
-            </div>
-
-            <button className="view-all">
-              View All
-            </button>
-          </div>
-
-          <div className="alerts-table">
-
-            <div className="alert-row alert-heading">
-              <span>Threat</span>
-              <span>Source IP</span>
-              <span>Severity</span>
-              <span>Status</span>
-            </div>
-
-            <div className="alert-row">
-              <span>Suspicious Network Activity</span>
-              <span>192.168.1.24</span>
-              <span className="severity critical">Critical</span>
-              <span className="status investigating">
-                Investigating
-              </span>
-            </div>
-
-            <div className="alert-row">
-              <span>Port Scanning Detected</span>
-              <span>10.0.0.18</span>
-              <span className="severity high">High</span>
-              <span className="status blocked">
-                Blocked
-              </span>
-            </div>
-
-            <div className="alert-row">
-              <span>Unusual Traffic Pattern</span>
-              <span>172.16.0.45</span>
-              <span className="severity medium">Medium</span>
-              <span className="status monitoring">
-                Monitoring
-              </span>
-            </div>
-
-            <div className="alert-row">
-              <span>Unauthorized Connection</span>
-              <span>192.168.2.31</span>
-              <span className="severity high">High</span>
-              <span className="status blocked">
-                Blocked
-              </span>
-            </div>
-
-          </div>
-
-        </section>
-
-        {/* Footer */}
-        <footer>
-          <p>
-            NetraX • AI-Based Cyber Threat Detection System
-          </p>
-
-          <p>
-            Last updated: Just now
-          </p>
-        </footer>
-
+        <ThreatModelGrid models={threatModels} alerts={alerts} analysisStatus={analysisStatus} />
+        <footer className="footer">NetraX · Passive one-way detection · Evidence-aware results for unidirectional traffic</footer>
       </main>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
