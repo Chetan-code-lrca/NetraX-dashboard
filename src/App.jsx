@@ -23,15 +23,20 @@ function App() {
   const [error, setError] = useState('')
   const [selectedAlertId, setSelectedAlertId] = useState(null)
   const abortRef = useRef(null)
+  const healthCheckRef = useRef(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
   useEffect(() => {
     const controller = new AbortController()
+    healthCheckRef.current = controller
     checkApiHealth(controller.signal)
       .then((available) => setBackendStatus(available ? 'online' : 'offline'))
       .catch((requestError) => {
         if (requestError.name !== 'AbortError') setBackendStatus('offline')
+      })
+      .finally(() => {
+        if (healthCheckRef.current === controller) healthCheckRef.current = null
       })
     return () => controller.abort()
   }, [])
@@ -57,6 +62,8 @@ function App() {
     if (!trafficFile) return
     setError('')
     setAnalysisStatus('uploading')
+    healthCheckRef.current?.abort()
+    healthCheckRef.current = null
     abortRef.current = new AbortController()
     try {
       setAnalysisStatus('analyzing')
