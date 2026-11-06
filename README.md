@@ -16,7 +16,7 @@ The dashboard currently includes:
 - Read-only network-path visualization
 - Refresh and connection-status handling
 
-The UI is designed around passive observation: the dashboard presents the results returned by the backend and does not itself capture packets or run the detection models. The frontend API client sends uploaded files to `/api/analyze`. fileciteturn886file0
+The UI is designed around passive observation: the dashboard presents the results returned by the backend and does not itself capture packets or run the detection models. The frontend API client sends uploaded files to `/api/analyze`.
 
 ## Tech stack
 
@@ -25,7 +25,7 @@ The UI is designed around passive observation: the dashboard presents the result
 - JavaScript (ES modules)
 - ESLint
 
-The project scripts are:
+The project scripts, as defined in `package.json`, are:
 
 ```text
 npm run dev      # local development server
@@ -34,7 +34,7 @@ npm run lint     # ESLint checks
 npm run preview  # preview the production build locally
 ```
 
-These commands and dependencies are defined in `package.json`. fileciteturn883file0
+These commands and dependencies are defined in `package.json`.
 
 ## Requirements
 
@@ -55,12 +55,12 @@ cd NetraX-dashboard
 Install dependencies:
 
 ```bash
-npm install
+npm ci
 ```
 
 ### Configure the API
 
-The frontend reads the backend URL from `VITE_API_BASE_URL` and falls back to `http://localhost:8000` when the variable is not set. fileciteturn886file0
+The frontend reads the backend URL from `VITE_API_BASE_URL` and falls back to `http://localhost:8000` when the variable is not set.
 
 Create a local `.env` file when the backend is not running on that default address:
 
@@ -92,7 +92,7 @@ To preview the built application locally:
 npm run preview
 ```
 
-The Vite configuration uses the React plugin and does not require a separate build command beyond the standard Vite scripts. fileciteturn889file0
+The Vite configuration uses the React plugin and does not require a separate build command beyond the standard Vite scripts.
 
 ## Backend connection
 
@@ -102,7 +102,7 @@ The frontend expects the NetraX backend to expose:
 POST /api/analyze
 ```
 
-The uploaded capture is sent as multipart form data under the `file` field. A successful response is returned to the dashboard for rendering. Connection failures are surfaced as a backend-offline error in the UI. fileciteturn886file0
+The uploaded capture is sent as multipart form data under the `file` field. A successful response is returned to the dashboard for rendering. Connection failures are surfaced as a backend-offline error in the UI.
 
 Because this repository contains only the frontend, cloning it by itself is enough to build the interface but not enough to run a real traffic analysis. The backend must be available at the configured API URL.
 
@@ -155,4 +155,4 @@ NetraX API
 
 ## Notes
 
-The dashboard currently presents backend connection state explicitly. When the API is unavailable, analysis actions cannot produce live results because the frontend has no local packet-analysis engine of its own. fileciteturn886file0
+The dashboard currently presents backend connection state explicitly. When the API is unavailable, analysis actions cannot produce live results because the frontend has no local packet-analysis engine of its own.
