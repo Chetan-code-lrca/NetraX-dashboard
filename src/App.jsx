@@ -12,18 +12,29 @@ import ThreatActivity from './components/ThreatActivity'
 import ThreatModelGrid from './components/ThreatModelGrid'
 import { threatModels } from './data/threatModels'
 import { normalizeAnalysisResponse } from './models/analysis'
-import { analyzeTraffic } from './services/api'
+import { analyzeTraffic, checkApiHealth } from './services/api'
 
 function App() {
   const [trafficFile, setTrafficFile] = useState(null)
   const [recordCount, setRecordCount] = useState(null)
   const [analysisStatus, setAnalysisStatus] = useState('idle')
+  const [backendStatus, setBackendStatus] = useState('checking')
   const [analysis, setAnalysis] = useState(null)
   const [error, setError] = useState('')
   const [selectedAlertId, setSelectedAlertId] = useState(null)
   const abortRef = useRef(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    checkApiHealth(controller.signal)
+      .then((available) => setBackendStatus(available ? 'online' : 'offline'))
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') setBackendStatus('offline')
+      })
+    return () => controller.abort()
+  }, [])
 
   const alerts = analysisStatus === 'complete' ? analysis?.alerts ?? [] : []
   const selectedAlert = alerts.find((alert) => alert.flow_id === selectedAlertId)
@@ -52,6 +63,7 @@ function App() {
       const response = await analyzeTraffic(trafficFile, abortRef.current.signal)
       const normalized = normalizeAnalysisResponse(response, trafficFile)
       setAnalysis(normalized)
+      setBackendStatus('online')
       if (normalized.status === 'complete') {
         setAnalysisStatus('complete')
         setSelectedAlertId(normalized.alerts[0]?.flow_id ?? null)
@@ -59,13 +71,14 @@ function App() {
     } catch (requestError) {
       if (requestError.name === 'AbortError') { setAnalysisStatus('ready'); return }
       setError(requestError.message)
+      setBackendStatus(requestError.backendOffline ? 'offline' : 'online')
       setAnalysisStatus(requestError.backendOffline ? 'backend_offline' : 'error')
     }
   }
 
   const stopAnalysis = () => abortRef.current?.abort()
   const resetAnalysis = () => { abortRef.current?.abort(); setTrafficFile(null); setRecordCount(null); setAnalysisStatus('idle'); setAnalysis(null); setError(''); setSelectedAlertId(null) }
-  const headerStatus = analysisStatus === 'backend_offline' ? 'BACKEND OFFLINE' : analysisStatus === 'complete' ? 'ANALYSIS COMPLETE' : 'ANALYSIS SERVICE READY'
+  const headerStatus = backendStatus === 'checking' ? 'CHECKING API' : backendStatus === 'online' ? 'API ONLINE' : 'API OFFLINE'
 
   return (
     <div className="app-shell">
