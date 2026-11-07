@@ -13,10 +13,10 @@ import ThreatModelGrid from './components/ThreatModelGrid'
 import { threatModels } from './data/threatModels'
 import { normalizeAnalysisResponse } from './models/analysis'
 import { analyzeTraffic, checkApiHealth } from './services/api'
+import { validateTrafficFile } from './services/file-validation'
 
 function App() {
   const [trafficFile, setTrafficFile] = useState(null)
-  const [recordCount, setRecordCount] = useState(null)
   const [analysisStatus, setAnalysisStatus] = useState('idle')
   const [backendStatus, setBackendStatus] = useState('checking')
   const [analysis, setAnalysis] = useState(null)
@@ -44,18 +44,28 @@ function App() {
   const alerts = analysisStatus === 'complete' ? analysis?.alerts ?? [] : []
   const selectedAlert = alerts.find((alert) => alert.flow_id === selectedAlertId)
 
-  const handleFile = async (file) => {
+  const handleFile = (file) => {
     abortRef.current?.abort()
-    setTrafficFile(file)
-    setRecordCount(null)
     setAnalysis(null)
     setError('')
     setSelectedAlertId(null)
-    setAnalysisStatus(file ? 'ready' : 'idle')
-    if (file?.name.toLowerCase().endsWith('.csv')) {
-      const contents = await file.text()
-      setRecordCount(Math.max(contents.trim().split(/\r?\n/).length - 1, 0))
+
+    if (!file) {
+      setTrafficFile(null)
+      setAnalysisStatus('idle')
+      return
     }
+
+    const validationError = validateTrafficFile(file)
+    if (validationError) {
+      setTrafficFile(null)
+      setError(validationError)
+      setAnalysisStatus('error')
+      return
+    }
+
+    setTrafficFile(file)
+    setAnalysisStatus('ready')
   }
 
   const startAnalysis = async () => {
@@ -84,14 +94,14 @@ function App() {
   }
 
   const stopAnalysis = () => abortRef.current?.abort()
-  const resetAnalysis = () => { abortRef.current?.abort(); setTrafficFile(null); setRecordCount(null); setAnalysisStatus('idle'); setAnalysis(null); setError(''); setSelectedAlertId(null) }
+  const resetAnalysis = () => { abortRef.current?.abort(); setTrafficFile(null); setAnalysisStatus('idle'); setAnalysis(null); setError(''); setSelectedAlertId(null) }
   const headerStatus = backendStatus === 'checking' ? 'CHECKING API' : backendStatus === 'online' ? 'API ONLINE' : 'API OFFLINE'
 
   return (
     <div className="app-shell">
       <Header systemStatus={headerStatus} />
       <main className="dashboard">
-        <TrafficInput file={trafficFile} recordCount={recordCount} status={analysisStatus} error={error} onFile={handleFile} onStart={startAnalysis} onStop={stopAnalysis} onReset={resetAnalysis} />
+        <TrafficInput file={trafficFile} status={analysisStatus} error={error} onFile={handleFile} onStart={startAnalysis} onStop={stopAnalysis} onReset={resetAnalysis} />
         <NetworkPath alert={selectedAlert} />
         <AnalysisProgress status={analysisStatus} analysis={analysis} />
         <SecuritySummary alerts={alerts} totalFlows={analysis?.flows_processed ?? null} isComplete={analysisStatus === 'complete'} />
