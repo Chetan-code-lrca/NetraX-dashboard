@@ -29,5 +29,8 @@ jobs:
       - name: Check code style
         run: npm run lint
 
+      - name: Run frontend unit tests
+        run: npm test
+
       - name: Build production bundle
         run: npm run build
